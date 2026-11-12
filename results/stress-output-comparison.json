@@ -1,0 +1,14 @@
+{
+  "cases": [
+    {
+      "n": 512,
+      "outputs_identical": true,
+      "sha256": "27d082a11c39c1aeb83fef6edbd3d945d064d7e26f53bfcd8cf420205ca1a26a"
+    },
+    {
+      "n": 4096,
+      "outputs_identical": true,
+      "sha256": "27d082a11c39c1aeb83fef6edbd3d945d064d7e26f53bfcd8cf420205ca1a26a"
+    }
+  ]
+}

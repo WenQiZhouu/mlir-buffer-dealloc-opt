@@ -1,0 +1,23 @@
+# generated
+build/
+results/*
+!results/final-summary.md
+!results/integration-validation.json
+!results/mlir-benchmark.json
+!results/mlir-benchmark-observable.json
+!results/mixed-origin-differential.json
+!results/stress-output-comparison.json
+!results/observable-output-comparison.json
+benchmarks/wide-*.mlir
+llvm-upstream/
+llvm-patched/
+llvm-build-base/
+llvm-build-patched/
+__pycache__/
+*.pyc
+*.obj
+*.exe
+test_write.tmp
+
+build-artifacts/
+vendor/*.tar.gz

@@ -1,0 +1,114 @@
+--- a/mlir/lib/Dialect/Bufferization/Transforms/BufferDeallocationSimplification.cpp
++++ b/mlir/lib/Dialect/Bufferization/Transforms/BufferDeallocationSimplification.cpp
+@@ -17,10 +17,11 @@
+ #include "mlir/Dialect/Bufferization/Transforms/Passes.h"
+ #include "mlir/Dialect/Func/IR/FuncOps.h"
+ #include "mlir/Dialect/MemRef/IR/MemRef.h"
+ #include "mlir/IR/Matchers.h"
+ #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
++#include "llvm/ADT/DenseMap.h"
+ 
+ namespace mlir {
+ namespace bufferization {
+ #define GEN_PASS_DEF_BUFFERDEALLOCATIONSIMPLIFICATIONPASS
+ #include "mlir/Dialect/Bufferization/Transforms/Passes.h.inc"
+@@ -312,19 +313,43 @@
+                                 PatternRewriter &rewriter) const override {
+     Location loc = deallocOp.getLoc();
+     if (deallocOp.getMemrefs().size() <= 1)
+       return failure();
+ 
++    // Fast path: when every operand is an alloc (or a chain of view-like
++    // operations rooted in an alloc), two operands may alias only when their
++    // allocation roots are identical. This avoids quadratic pairwise checks.
++    // Unknown origins retain the original conservative analysis below.
++    SmallVector<Value> knownRoots;
++    knownRoots.reserve(deallocOp.getMemrefs().size());
++    llvm::DenseMap<Value, int64_t> rootUseCount;
++    bool allRootsKnown = true;
++    for (Value memref : deallocOp.getMemrefs()) {
++      Value root = getViewBase(memref);
++      if (!root.getDefiningOp<memref::AllocOp>()) {
++        allRootsKnown = false;
++        break;
++      }
++      knownRoots.push_back(root);
++      ++rootUseCount[root];
++    }
++
+     SmallVector<Value> remainingMemrefs, remainingConditions;
+     SmallVector<SmallVector<Value>> updatedConditions;
+     for (int64_t i = 0, e = deallocOp.getMemrefs().size(); i < e; ++i) {
+       Value memref = deallocOp.getMemrefs()[i];
+       Value cond = deallocOp.getConditions()[i];
+-      SmallVector<Value> otherMemrefs(deallocOp.getMemrefs());
+-      otherMemrefs.erase(otherMemrefs.begin() + i);
+-      // Check if `memref` can split off into a separate bufferization.dealloc.
+-      if (potentiallyAliasesMemref(analysis, otherMemrefs, memref)) {
++      bool mayAlias;
++      if (allRootsKnown) {
++        mayAlias = rootUseCount.lookup(knownRoots[i]) > 1;
++      } else {
++        SmallVector<Value> otherMemrefs(deallocOp.getMemrefs());
++        otherMemrefs.erase(otherMemrefs.begin() + i);
++        mayAlias = potentiallyAliasesMemref(analysis, otherMemrefs, memref);
++      }
++      // Check if memref can split off into a separate bufferization.dealloc.
++      if (mayAlias) {
+         // `memref` alias with other memrefs, do not split off.
+         remainingMemrefs.push_back(memref);
+         remainingConditions.push_back(cond);
+         continue;
+       }
+
+diff --git a/mlir/test/Dialect/Bufferization/Transforms/buffer-deallocation-simplification-wide.mlir b/mlir/test/Dialect/Bufferization/Transforms/buffer-deallocation-simplification-wide.mlir
+new file mode 100644
+--- /dev/null
++++ b/mlir/test/Dialect/Bufferization/Transforms/buffer-deallocation-simplification-wide.mlir
+@@ -0,0 +1,46 @@
++// RUN: mlir-opt %s --buffer-deallocation-simplification --split-input-file | FileCheck %s
++
++// Three independent alloc roots are split into separate dealloc operations.
++// memref.copy makes allocations observable so they cannot be trivially erased.
++func.func @split_distinct_alloc_roots(%ret: memref<1xi8>, %src: memref<1xi8>, %c0: i1, %c1: i1, %c2: i1) -> i1 {
++  %a0 = memref.alloc() : memref<1xi8>
++  %a1 = memref.alloc() : memref<1xi8>
++  %a2 = memref.alloc() : memref<1xi8>
++  memref.copy %src, %a0 : memref<1xi8> to memref<1xi8>
++  memref.copy %src, %a1 : memref<1xi8> to memref<1xi8>
++  memref.copy %src, %a2 : memref<1xi8> to memref<1xi8>
++  %out = bufferization.dealloc (%a0, %a1, %a2 : memref<1xi8>, memref<1xi8>, memref<1xi8>) if (%c0, %c1, %c2) retain (%ret : memref<1xi8>)
++  return %out : i1
++}
++
++// CHECK-LABEL: func.func @split_distinct_alloc_roots
++// CHECK-COUNT-3: bufferization.dealloc ({{.*}} : memref<1xi8>) if (
++// CHECK-NOT: bufferization.dealloc ({{.*}}, {{.*}} :
++// CHECK: return %{{.*}} : i1
++
++// -----
++
++// Two views of the same allocation must NOT be split (possible alias).
++func.func @do_not_split_same_allocation_root(%ret: memref<1xi8>, %c0: i1, %c1: i1) -> i1 {
++  %a = memref.alloc() : memref<2xi8>
++  %v0 = memref.subview %a[0][1][1] : memref<2xi8> to memref<1xi8>
++  %v1 = memref.subview %a[1][1][1] : memref<2xi8> to memref<1xi8, strided<[1], offset: 1>>
++  %out = bufferization.dealloc (%v0, %v1 : memref<1xi8>, memref<1xi8, strided<[1], offset: 1>>) if (%c0, %c1) retain (%ret : memref<1xi8>)
++  return %out : i1
++}
++
++// CHECK-LABEL: func.func @do_not_split_same_allocation_root
++// CHECK: bufferization.dealloc ({{.*}}, {{.*}} : memref<1xi8>, memref<1xi8, strided<[1], offset: 1>>)
++// CHECK: return %{{.*}} : i1
++
++// -----
++
++// Unknown origins use the original conservative alias analysis.
++func.func @unknown_origins_keep_conservative_fallback(%a: memref<1xi8>, %b: memref<1xi8>, %ret: memref<1xi8>, %c0: i1, %c1: i1) -> i1 {
++  %out = bufferization.dealloc (%a, %b : memref<1xi8>, memref<1xi8>) if (%c0, %c1) retain (%ret : memref<1xi8>)
++  return %out : i1
++}
++
++// CHECK-LABEL: func.func @unknown_origins_keep_conservative_fallback
++// CHECK: bufferization.dealloc ({{.*}}, {{.*}} : memref<1xi8>, memref<1xi8>)
++// CHECK: return %{{.*}} : i1

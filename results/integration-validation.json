@@ -1,0 +1,13 @@
+{
+  "llvm_source": "/home/zwq/llvm-project-src",
+  "llvm_build": "/home/zwq/llvm-build",
+  "baseline_binary": "/mnt/d/runfiles/mlir-buffer-dealloc-opt/build-artifacts/mlir-opt-baseline",
+  "patched_binary": "/mnt/d/runfiles/mlir-buffer-dealloc-opt/build-artifacts/mlir-opt-patched",
+  "baseline_sha256": "4ae9d3394e3750f3b6b98df8ac54f1fac19cc769e21a180643e5e40c6e5b2953",
+  "patched_sha256": "3efcef7bd6814ecc0927ac433bd7acaca733c3d8dbe0b262ae3c429245f1e7f1",
+  "patched_source_sha256": "439044b7cc13f5db532385e5b658f4d824e21bbffff812dde493102997846c5e",
+  "wide_test_output_identical": true,
+  "wide_test": "/mnt/d/runfiles/mlir-buffer-dealloc-opt/tests/llvm/buffer-deallocation-simplification-wide.mlir",
+  "upstream_test": "/home/zwq/llvm-project-src/mlir/test/Dialect/Bufferization/Transforms/buffer-deallocation-simplification.mlir",
+  "timestamp_local": "2026-11-12 20:18:32"
+}

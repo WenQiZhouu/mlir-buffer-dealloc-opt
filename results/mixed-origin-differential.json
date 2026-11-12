@@ -1,0 +1,16 @@
+{
+  "test": "/mnt/d/runfiles/mlir-buffer-dealloc-opt/tests/llvm/mixed-origin-differential.mlir",
+  "identical": true,
+  "binaries": {
+    "baseline": {
+      "exit_code": 0,
+      "sha256": "3300c173f1becc000a78dc2d4460318b780c82c8a1dc6f959bfe3c1617a6ac1a",
+      "stderr": ""
+    },
+    "patched": {
+      "exit_code": 0,
+      "sha256": "3300c173f1becc000a78dc2d4460318b780c82c8a1dc6f959bfe3c1617a6ac1a",
+      "stderr": ""
+    }
+  }
+}
