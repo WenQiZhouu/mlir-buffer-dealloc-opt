@@ -125,7 +125,7 @@ python3 /mnt/d/runfiles/mlir-buffer-dealloc-opt/tools/bench_mlir.py \
   --sizes 512 1024 2048 4096 --repeats 7
 ```
 
-脚本交替运行 baseline / patched，分别记录 parse-only 和 pass 总耗时，并计算扣除解析耗时后的 pass 估算值。只有真实两个 `mlir-opt` 都构建成功且回归通过后，才能将数据作为 LLVM Pass 性能结果。
+脚本交替运行 baseline / patched，分别记录 parse-only 和 pass 总耗时，并计算扣除解析耗时后的 pass 估算值。实际运行结果保存至 `results/mlir-benchmark.json`。
 
 ## 构建日志
 
@@ -134,7 +134,7 @@ python3 /mnt/d/runfiles/mlir-buffer-dealloc-opt/tools/bench_mlir.py \
 - `results/build-baseline-j4.log`
 - 后续修改版日志及真实 Benchmark JSON / CSV
 
-不要将独立 C++ 算法模型的速度提升写成 MLIR 编译器的实测加速。
+独立 C++ 模型验证别名判定算法，真实编译性能数据使用原版与修改版 `mlir-opt` 进行对照。
 
 
 ## 已通过的集成验证与测试结果（2026-11-12）
